@@ -1,10 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from solver import solve_schedule
+from solver import solver_manager
 from domain import TaskSchedule, Worker, Task
 from datetime import datetime
+from uuid import uuid4
+from time import sleep
 
 app = FastAPI()
+data_sets: dict[str, TaskSchedule] = {}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Change this to specific origins in production
@@ -29,9 +33,22 @@ test_schedule = TaskSchedule(
 )
 
 @app.post("/solve")
-def get_solved_schedule():
-    solved_schedule = solve_schedule(test_schedule)
-    return solved_schedule
+async def get_solved_schedule(schedule: TaskSchedule):
+    job_id = str(uuid4())
+    data_sets[job_id] = schedule
+    solver_manager.solve(job_id, schedule, lambda solution: update_schedule(job_id, solution))
+
+    stop_solver(job_id)
+    
+    return job_id
+
+def update_schedule(problem_id: str, schedule: TaskSchedule):
+    global data_sets
+    data_sets[problem_id] = schedule
+
+def stop_solver(job_id: str):
+    sleep(1000)
+    solver_manager.terminate_early(job_id)
 
 if __name__ == "__main__":
     import uvicorn
